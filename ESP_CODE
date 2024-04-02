@@ -3,44 +3,14 @@
 
 #include <ArduinoJson.h>
 
-#if defined(ESP8266)
-    #include <ESP8266WiFi.h>
-    #include <ESP8266mDNS.h>
-    #include <ESP8266HTTPClient.h>
-    #include <ESP8266WebServer.h>
-#else
-    #include <ESPmDNS.h>
-    #include <WiFi.h>
-    #include <HTTPClient.h>
-    #include <WebServer.h>
-#endif
-
+#include <WiFi.h>
 #include <WiFiUdp.h>
+#include <HTTPClient.h>
 #include <ArduinoOTA.h>
-#include <WiFiClient.h>
 #include <Ticker.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "MiningJob.h"
 #include "Settings.h"
-
-#ifdef USE_LAN
-  #include <ETH.h>
-#endif
-
-
-#if defined(ESP8266)
-    #define CORE 1
-    typedef ESP8266WebServer WebServer;
-#elif defined(CONFIG_FREERTOS_UNICORE)
-    #define CORE 1
-#else
-    #define CORE 2
-    #include <TridentTD_EasyFreeRTOS32.h>
-#endif
-
 
 namespace {
     MiningConfig *configuration = new MiningConfig(
@@ -48,14 +18,6 @@ namespace {
         RIG_IDENTIFIER,
         MINER_KEY
     );
-
-    #if defined(ESP32) && CORE == 2
-      EasyMutex mutexClientData, mutexConnectToServer;
-    #endif
-
-    #ifdef USE_LAN
-      static bool eth_connected = false;
-    #endif
 
     void UpdateHostPort(String input) {
         DynamicJsonDocument doc(256);
@@ -73,11 +35,9 @@ namespace {
 
     String httpGetString(String URL) {
         String payload = "";
-        WiFiClientSecure client;
-        client.setInsecure();
         HTTPClient http;
 
-        if (http.begin(client, URL)) {
+        if (http.begin(URL)) {
           int httpCode = http.GET();
 
           if (httpCode == HTTP_CODE_OK)
@@ -110,83 +70,13 @@ namespace {
         }
 
         UpdateHostPort(input);
-      }
-
-    #ifdef USE_LAN
-    void WiFiEvent(WiFiEvent_t event)
-    {
-      switch (event) {
-        case ARDUINO_EVENT_ETH_START:
-          #if defined(SERIAL_PRINTING)
-            Serial.println("ETH Started");
-          #endif
-
-          ETH.setHostname("esp32-ethernet");
-          break;
-        case ARDUINO_EVENT_ETH_CONNECTED:
-          #if defined(SERIAL_PRINTING)
-            Serial.println("ETH Connected");
-          #endif
-          break;
-        case ARDUINO_EVENT_ETH_GOT_IP:
-          #if defined(SERIAL_PRINTING)
-            Serial.println("ETH Got IP");
-          #endif
-          eth_connected = true;
-          break;
-
-        case ARDUINO_EVENT_ETH_DISCONNECTED:
-          #if defined(SERIAL_PRINTING)
-            Serial.println("ETH Disconnected");
-          #endif
-          eth_connected = false;
-          break;
-        case ARDUINO_EVENT_ETH_STOP:
-          #if defined(SERIAL_PRINTING)
-            Serial.println("ETH Stopped");
-          #endif
-          eth_connected = false;
-          break;
-        default:
-          break;
-      }
     }
-    #endif
 
     void SetupWifi() {
-      
-      #ifdef USE_LAN
-        #if defined(SERIAL_PRINTING)
-          Serial.println("Connecting to Ethernet...");
-        #endif
-        WiFi.onEvent(WiFiEvent); 
-        ETH.begin();
-        
-
-        while (!eth_connected) {
-            delay(500);
-            #if defined(SERIAL_PRINTING)
-                Serial.print(".");
-            #endif
-        }
-
-        #if defined(SERIAL_PRINTING)
-          Serial.println("\n\nSuccessfully connected to Ethernet");
-          Serial.println("Local IP address: " + ETH.localIP().toString());
-          Serial.println("Rig name: " + String(RIG_IDENTIFIER));
-          Serial.println();
-        #endif
-
-      #else
         #if defined(SERIAL_PRINTING)
           Serial.println("Connecting to: " + String(SSID));
         #endif
-        WiFi.mode(WIFI_STA); 
-        #if defined(ESP8266)
-            WiFi.setSleepMode(WIFI_NONE_SLEEP);
-        #else
-            WiFi.setSleep(false);
-        #endif
+        WiFi.mode(WIFI_STA);
         WiFi.begin(SSID, PASSWORD);
 
         int wait_passes = 0;
@@ -207,8 +97,6 @@ namespace {
           Serial.println("Rig name: " + String(RIG_IDENTIFIER));
           Serial.println();
         #endif
-
-      #endif
 
         SelectNode();
     }
@@ -249,17 +137,8 @@ namespace {
     }
 
     void VerifyWifi() {
-      #ifdef USE_LAN
-        while ((!eth_connected) || (ETH.localIP() == IPAddress(0, 0, 0, 0))) {
-          #if defined(SERIAL_PRINTING)
-            Serial.println("Ethernet connection lost. Reconnect..." );
-          #endif
-          SetupWifi();
-        }
-      #else
         while (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0))
             WiFi.reconnect();
-      #endif
     }
 
     void handleSystemEvents(void) {
@@ -268,77 +147,74 @@ namespace {
         yield();
     }
 
+    MiningJob *job[CORE];
 
+    #if CORE == 2
+      EasyFreeRTOS32 task1, task2;
+    #endif
 
-MiningJob *job[CORE];
+    void task1_func(void *) {
+        #if defined(ESP32) && CORE == 2
+          VOID SETUP() { }
 
-#if CORE == 2
-  EasyFreeRTOS32 task1, task2;
-#endif
+          VOID LOOP() {
+            job[0]->mine();
+          }
+        #endif
+    }
 
-void task1_func(void *) {
-    #if defined(ESP32) && CORE == 2
-      VOID SETUP() { }
+    void task2_func(void *) {
+        #if defined(ESP32) && CORE == 2
+          VOID SETUP() {
+            job[1] = new MiningJob(1, configuration);
+          }
 
-      VOID LOOP() {
+          VOID LOOP() {
+            job[1]->mine();
+          }
+        #endif
+    }
+
+    void setup() {
+        delay(500);
+
+        #if defined(SERIAL_PRINTING)
+          Serial.begin(500000);
+          Serial.println("\n\nDuino-Coin " + String(configuration->MINER_VER));
+        #endif
+        pinMode(LED_BUILTIN, OUTPUT);
+
+        assert(CORE == 1 || CORE == 2);
+        WALLET_ID = String(random(0, 2811)); 
+        job[0] = new MiningJob(0, configuration);
+
+        SetupWifi();
+        SetupOTA();
+
+        job[0]->blink(BLINK_SETUP_COMPLETE);
+
+        #if CORE == 2 && defined(ESP32)
+            task1.start(task1_func);
+            task2.start(task2_func);
+        #endif
+    }
+
+    void loopOneCore() {
         job[0]->mine();
-      }
-    #endif
-}
 
-void task2_func(void *) {
-    #if defined(ESP32) && CORE == 2
-      VOID SETUP() {
-        job[1] = new MiningJob(1, configuration);
-      }
+        #if defined(ESP8266)
+            system_update_cpu_freq(160);
+        #else
+            setCpuFrequencyMhz(240);
+        #endif
 
-      VOID LOOP() {
-        job[1]->mine();
-      }
-    #endif
-}
+        VerifyWifi();
+        ArduinoOTA.handle();
+    }
 
-void setup() {
-    delay(500);
-    
-    #if defined(SERIAL_PRINTING)
-      Serial.begin(500000);
-      Serial.println("\n\nDuino-Coin " + String(configuration->MINER_VER));
-    #endif
-    pinMode(LED_BUILTIN, OUTPUT);
-
-    assert(CORE == 1 || CORE == 2);
-    WALLET_ID = String(random(0, 2811)); 
-    job[0] = new MiningJob(0, configuration);
-
-
-    SetupWifi();
-    SetupOTA();
-
-    job[0]->blink(BLINK_SETUP_COMPLETE);
-
-    #if CORE == 2 && defined(ESP32)
-        task1.start(task1_func);
-        task2.start(task2_func);
-    #endif
-}
-
-void loopOneCore() {
-    job[0]->mine();
-
-    #if defined(ESP8266)
-        system_update_cpu_freq(160);
-    #else
-        setCpuFrequencyMhz(240);
-    #endif
-    
-    VerifyWifi();
-    ArduinoOTA.handle();
-}
-
-
-void loop() {
-    #if CORE == 1
-        loopOneCore();
-    #endif
+    void loop() {
+        #if CORE == 1
+            loopOneCore();
+        #endif
+    }
 }
