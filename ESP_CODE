@@ -1,30 +1,8 @@
-/*
-   ____  __  __  ____  _  _  _____       ___  _____  ____  _  _
-  (  _ \(  )(  )(_  _)( \( )(  _  )___  / __)(  _  )(_  _)( \( )
-   )(_) ))(__)(  _)(_  )  (  )(_)((___)( (__  )(_)(  _)(_  )  (
-  (____/(______)(____)(_)\_)(_____)     \___)(_____)(____)(_)\_)
-  Official code for all ESP8266/32 boards            version 4.0
-  Main .ino file
 
-  The Duino-Coin Team & Community 2019-2024 © MIT Licensed
-  https://duinocoin.com
-  https://github.com/revoxhere/duino-coin
-
-  If you don't know where to start, visit official website and navigate to
-  the Getting Started page. Have fun mining!
-
-  To edit the variables (username, WiFi settings, etc.) use the Settings.h tab!
-*/
 
 /* If optimizations cause problems, change them to -O0 (the default) */
 #pragma GCC optimize("-Ofast")
 
-/* If during compilation the line below causes a
-  "fatal error: arduinoJson.h: No such file or directory"
-  message to occur; it means that you do NOT have the
-  ArduinoJSON library installed. To install it,
-  go to the below link and follow the instructions:
-  https://github.com/revoxhere/duino-coin/issues/832 */
 #include <ArduinoJson.h>
 
 #if defined(ESP8266)
@@ -58,8 +36,6 @@
   #include "Dashboard.h"
 #endif
 
-// Auto adjust physical core count
-// (ESP32-S2/C3 have 1 core, ESP32 has 2 cores, ESP8266 has 1 core)
 #if defined(ESP8266)
     #define CORE 1
     typedef ESP8266WebServer WebServer;
@@ -67,7 +43,6 @@
     #define CORE 1
 #else
     #define CORE 2
-    // Install TridentTD_EasyFreeRTOS32 if you get an error
     #include <TridentTD_EasyFreeRTOS32.h>
 #endif
 
@@ -91,7 +66,6 @@ namespace {
     #endif
 
     void UpdateHostPort(String input) {
-        // Thanks @ricaun for the code
         DynamicJsonDocument doc(256);
         deserializeJson(doc, input);
         const char *name = doc["name"];
@@ -138,8 +112,6 @@ namespace {
             input = httpGetString("https://server.duinocoin.com/getPool");
             
             delay(waitTime * 1000);
-            // Increase wait time till a maximum of 32 seconds
-            // (addresses: Limit connection requests on failure in ESP boards #1041)
             waitTime *= 2;
             if (waitTime > 32)
                   waitTime = 32;
@@ -156,8 +128,7 @@ namespace {
           #if defined(SERIAL_PRINTING)
             Serial.println("ETH Started");
           #endif
-          // The hostname must be set after the interface is started, but needs
-          // to be set before DHCP, so set it from the event handler thread.
+
           ETH.setHostname("esp32-ethernet");
           break;
         case ARDUINO_EVENT_ETH_CONNECTED:
@@ -196,7 +167,7 @@ namespace {
         #if defined(SERIAL_PRINTING)
           Serial.println("Connecting to Ethernet...");
         #endif
-        WiFi.onEvent(WiFiEvent);  // Will call WiFiEvent() from another thread.
+        WiFi.onEvent(WiFiEvent); 
         ETH.begin();
         
 
@@ -218,7 +189,7 @@ namespace {
         #if defined(SERIAL_PRINTING)
           Serial.println("Connecting to: " + String(SSID));
         #endif
-        WiFi.mode(WIFI_STA); // Setup ESP in client mode
+        WiFi.mode(WIFI_STA); 
         #if defined(ESP8266)
             WiFi.setSleepMode(WIFI_NONE_SLEEP);
         #else
@@ -251,7 +222,6 @@ namespace {
     }
 
     void SetupOTA() {
-        // Prepare OTA handler
         ArduinoOTA.onStart([]()
                            { 
                              #if defined(SERIAL_PRINTING)
@@ -282,7 +252,7 @@ namespace {
                                 #endif
                           });
 
-        ArduinoOTA.setHostname(RIG_IDENTIFIER); // Give port a name
+        ArduinoOTA.setHostname(RIG_IDENTIFIER); 
         ArduinoOTA.begin();
     }
 
@@ -338,7 +308,7 @@ namespace {
         }
     #endif
 
-} // End of namespace
+}
 
 MiningJob *job[CORE];
 
@@ -378,7 +348,7 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
 
     assert(CORE == 1 || CORE == 2);
-    WALLET_ID = String(random(0, 2811)); // Needed for miner grouping in the wallet
+    WALLET_ID = String(random(0, 2811)); 
     job[0] = new MiningJob(0, configuration);
 
     #if defined(USE_DHT)
@@ -454,10 +424,8 @@ void loopOneCore() {
     job[0]->mine();
 
     #if defined(ESP8266)
-        // Fastest clock mode for 8266s
         system_update_cpu_freq(160);
     #else
-        // Fastest clock mode for 32s
         setCpuFrequencyMhz(240);
     #endif
     
