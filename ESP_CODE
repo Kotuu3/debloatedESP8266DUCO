@@ -30,9 +30,6 @@
   #include <ETH.h>
 #endif
 
-#if defined(WEB_DASHBOARD)
-  #include "Dashboard.h"
-#endif
 
 #if defined(ESP8266)
     #define CORE 1
@@ -44,9 +41,6 @@
     #include <TridentTD_EasyFreeRTOS32.h>
 #endif
 
-#if defined(WEB_DASHBOARD)
-    WebServer server(80);
-#endif
 
 namespace {
     MiningConfig *configuration = new MiningConfig(
@@ -274,39 +268,7 @@ namespace {
         yield();
     }
 
-    #if defined(WEB_DASHBOARD)
-        void dashboard() {
-             #if defined(SERIAL_PRINTING)
-               Serial.println("Handling HTTP client");
-             #endif
-             String s = WEBSITE;
-             #ifdef USE_LAN
-              s.replace("@@IP_ADDR@@", ETH.localIP().toString());
-             #else
-              s.replace("@@IP_ADDR@@", WiFi.localIP().toString());
-             #endif
-  
-             s.replace("@@HASHRATE@@", String(hashrate / 1000));
-             s.replace("@@DIFF@@", String(difficulty / 100));
-             s.replace("@@SHARES@@", String(share_count));
-             s.replace("@@NODE@@", String(node_id));
-             
-             #if defined(ESP8266)
-                 s.replace("@@DEVICE@@", "ESP8266");
-             #elif defined(CONFIG_FREERTOS_UNICORE)
-                 s.replace("@@DEVICE@@", "ESP32-S2/C3");
-             #else
-                 s.replace("@@DEVICE@@", "ESP32");
-             #endif
-             
-             s.replace("@@ID@@", String(RIG_IDENTIFIER));
-             s.replace("@@MEMORY@@", String(ESP.getFreeHeap()));
-             s.replace("@@VERSION@@", String(SOFTWARE_VERSION));
-             server.send(200, "text/html", s);
-        }
-    #endif
 
-}
 
 MiningJob *job[CORE];
 
@@ -353,27 +315,6 @@ void setup() {
     SetupWifi();
     SetupOTA();
 
-    #if defined(WEB_DASHBOARD)
-      if (!MDNS.begin(RIG_IDENTIFIER)) {
-        #if defined(SERIAL_PRINTING)
-          Serial.println("mDNS unavailable");
-        #endif
-      }
-      MDNS.addService("http", "tcp", 80);
-      #if defined(SERIAL_PRINTING)
-        #ifdef USE_LAN
-          Serial.println("Configured mDNS for dashboard on http://" + String(RIG_IDENTIFIER) 
-                     + ".local (or http://" + ETH.localIP().toString() + ")");
-        #else
-          Serial.println("Configured mDNS for dashboard on http://" + String(RIG_IDENTIFIER) 
-                     + ".local (or http://" + WiFi.localIP().toString() + ")");
-        #endif
-      #endif
-
-      server.on("/", dashboard);
-      server.begin();
-    #endif
-
     job[0]->blink(BLINK_SETUP_COMPLETE);
 
     #if CORE == 2 && defined(ESP32)
@@ -393,10 +334,8 @@ void loopOneCore() {
     
     VerifyWifi();
     ArduinoOTA.handle();
-    #if defined(WEB_DASHBOARD) 
-        server.handleClient();
-    #endif
 }
+
 
 void loop() {
     #if CORE == 1
