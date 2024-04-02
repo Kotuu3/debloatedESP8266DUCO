@@ -1,5 +1,3 @@
-
-
 /* If optimizations cause problems, change them to -O0 (the default) */
 #pragma GCC optimize("-Ofast")
 
@@ -351,42 +349,6 @@ void setup() {
     WALLET_ID = String(random(0, 2811)); 
     job[0] = new MiningJob(0, configuration);
 
-    #if defined(USE_DHT)
-        #if defined(SERIAL_PRINTING)
-          Serial.println("Initializing DHT sensor (Duino IoT)");
-        #endif
-        dht.begin();
-        #if defined(SERIAL_PRINTING)
-          Serial.println("Test reading: " + String(dht.readHumidity()) + "% humidity");
-          Serial.println("Test reading: temperature " + String(dht.readTemperature()) + "°C");
-        #endif
-    #endif
-
-    #if defined(USE_DS18B20)
-        #if defined(SERIAL_PRINTING)
-          Serial.println("Initializing DS18B20 sensor (Duino IoT)");
-        #endif
-        sensors.begin();
-        sensors.requestTemperatures(); 
-        #if defined(SERIAL_PRINTING)
-          Serial.println("Test reading: " + String(sensors.getTempCByIndex(0)) + "°C");
-        #endif
-    #endif
-
-    #if defined(USE_INTERNAL_SENSOR)
-       #if defined(SERIAL_PRINTING)
-         Serial.println("Initializing internal ESP32 temperature sensor (Duino IoT)");
-       #endif
-       temp_sensor_config_t temp_sensor = TSENS_CONFIG_DEFAULT();
-       temp_sensor.dac_offset = TSENS_DAC_L2;
-       temp_sensor_set_config(temp_sensor);
-       temp_sensor_start();
-       float result = 0;
-       temp_sensor_read_celsius(&result);
-       #if defined(SERIAL_PRINTING)
-         Serial.println("Test reading: " + String(result) + "°C");
-       #endif
-    #endif
 
     SetupWifi();
     SetupOTA();
