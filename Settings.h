@@ -11,9 +11,9 @@ extern const char MINER_KEY[] = "None";
 // Use Auto to autogenerate, None for no custom identifier
 extern const char RIG_IDENTIFIER[] = "ESP";
 // Change the part in brackets to your WiFi name
-extern const char SSID[] = "archlinux btw";
+extern const char SSID[] = "";
 // Change the part in brackets to your WiFi password
-extern const char PASSWORD[] = "fajnehaslodowifi";
+extern const char PASSWORD[] = "";
 
 // Uncomment if you want to host the dashboard page (available on ESPs IP address)
 // #define WEB_DASHBOARD
