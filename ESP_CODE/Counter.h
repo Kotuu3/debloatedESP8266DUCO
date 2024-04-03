@@ -29,6 +29,11 @@ public:
 
 protected:
   inline void inc_string(char *c) {
+    // In theory, the line below should be uncommented to avoid writing outside the buffer. In practice however,
+    // with max_digits set to 10 or more, we can fit all possible unsigned 32-bit integers in the buffer.
+    // The check is skipped to gain a small extra speed improvement.
+    // if (c >= buffer) return;
+
     if (*c < '9') {
       *c += 1;
     }
